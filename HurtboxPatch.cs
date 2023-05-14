@@ -1,0 +1,84 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using HarmonyLib;
+using IdolShowdown;
+using UnityEngine;
+
+namespace IdolShowdownHitboxViewer;
+
+public class HurtboxPatch
+{
+    private static
+        Dictionary<int, (LineRenderer outline, LineRenderer infill)>
+        lines = new();
+
+    private static readonly Color outlineColor = new(0f, 1f, 1f, 1f);
+    private static readonly Color infillColor = new(0f, 0.9098039f, 0.9098039f, 0.5f);
+
+    [HarmonyPatch(typeof(Hurtbox), "Awake")]
+    [HarmonyPostfix]
+    public static void InitHurtboxLineRenderers(Hurtbox __instance)
+    {
+        CleanupRemovedLines();
+
+        var outline = LR.Get(posCount: 4, outlineColor, sortOrder: 5, __instance.gameObject, loop: true);
+        var infill = LR.Get(posCount: 2, infillColor, sortOrder: 4, __instance.gameObject);
+
+        lines.Add(__instance.GetInstanceID(), (outline, infill));
+
+        Console.WriteLine($"added hurtbox with id {__instance.GetInstanceID()}");
+        Console.WriteLine(lines.Select(x => x.Key.ToString()).Join());
+    }
+
+    [HarmonyPatch(typeof(Hurtbox), "OnDrawGizmos")]
+    [HarmonyPostfix]
+    public static void UpdateHurtboxLineRenderers(Hurtbox __instance, FixedBoxCollider ___fixedBox)
+    {
+        if (!lines.ContainsKey(__instance.GetInstanceID()))
+            return;
+
+        var (outline, infill) = lines[__instance.GetInstanceID()];
+
+        if (outline == null || infill == null)
+        {
+            Console.WriteLine("[DEBUGGING] hurtbox is dead");
+            return;
+        }
+
+        outline.enabled = __instance.HitInvincible();
+        infill.enabled = __instance.HitInvincible();
+        
+        if (__instance.HitInvincible())
+            return;
+
+
+        var pos = ___fixedBox.Position().ToVector3();
+        var centerToCorner = ___fixedBox.WidthAndHeight.ToVector3() / 2f;
+        var lineWidth = Camera.main.PixelSize();
+        var realCenterToCorner = centerToCorner - lineWidth / 2f;
+
+        outline.SetPositions(new[]
+        {
+            pos + new Vector3(realCenterToCorner.x, realCenterToCorner.y),
+            pos + new Vector3(-realCenterToCorner.x, realCenterToCorner.y),
+            pos + new Vector3(-realCenterToCorner.x, -realCenterToCorner.y),
+            pos + new Vector3(realCenterToCorner.x, -realCenterToCorner.y),
+        });
+        outline.widthMultiplier = lineWidth.x;
+
+        infill.SetPositions(new[]
+        {
+            pos - new Vector3(realCenterToCorner.x, 0f),
+            pos + new Vector3(realCenterToCorner.x, 0f)
+        });
+        infill.widthMultiplier = 2f * realCenterToCorner.y;
+    }
+
+    private static void CleanupRemovedLines()
+    {
+        lines = lines
+            .Where(pair => pair.Value.outline != null && pair.Value.infill != null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+}

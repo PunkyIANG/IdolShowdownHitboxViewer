@@ -9,6 +9,7 @@ namespace IdolShowdownHitboxViewer
         private void Awake()
         {
             Harmony.CreateAndPatchAll(typeof(HitboxPatch));
+            Harmony.CreateAndPatchAll(typeof(HurtboxPatch));
         }
     }
 
