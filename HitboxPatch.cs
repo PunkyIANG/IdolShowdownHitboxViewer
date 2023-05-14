@@ -10,7 +10,7 @@ namespace IdolShowdownHitboxViewer;
 public class HitboxPatch
 {
     private static
-        Dictionary<int, (WeakReference<LineRenderer> outline, WeakReference<LineRenderer> infill)>
+        Dictionary<int, (LineRenderer outline, LineRenderer infill)>
         lines = new();
 
     private static readonly Color outlineColor = new(1f, 0f, 0f, 1f);
@@ -22,11 +22,10 @@ public class HitboxPatch
     {
         CleanupRemovedLines();
 
-        var outline = LR.Get(4, outlineColor, 5, __instance.gameObject, loop: true);
-        var infill = LR.Get(2, infillColor, 4, __instance.gameObject);
+        var outline = LR.Get(posCount: 4, outlineColor, sortOrder: 5, __instance.gameObject, loop: true);
+        var infill = LR.Get(posCount: 2, infillColor, sortOrder: 4, __instance.gameObject);
 
-        lines.Add(__instance.GetInstanceID(),
-            (new WeakReference<LineRenderer>(outline), new WeakReference<LineRenderer>(infill)));
+        lines.Add(__instance.GetInstanceID(), (outline, infill));
 
         Console.WriteLine($"added hitbox with id {__instance.GetInstanceID()}");
         Console.WriteLine(lines.Select(x => x.Key.ToString()).Join());
@@ -39,10 +38,9 @@ public class HitboxPatch
         if (!lines.ContainsKey(__instance.GetInstanceID()))
             return;
 
-        var (weakOutline, weakInfill) = lines[__instance.GetInstanceID()];
+        var (outline, infill) = lines[__instance.GetInstanceID()];
 
-        if (!weakOutline.TryGetTarget(out var outline)
-            || !weakInfill.TryGetTarget(out var infill))
+        if (outline == null || infill == null)
         {
             Console.WriteLine("[DEBUGGING] hitbox is dead");
             return;
@@ -74,7 +72,7 @@ public class HitboxPatch
     private static void CleanupRemovedLines()
     {
         lines = lines
-            .Where(x => x.Value.infill.TryGetTarget(out _) && x.Value.outline.TryGetTarget(out _))
-            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            .Where(pair => pair.Value.outline != null && pair.Value.infill != null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
     }
 }
